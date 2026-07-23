@@ -47,7 +47,7 @@ public class SecurityConfig {
 
     /**
      * Configures the security filter chain.
-     * Permits unauthenticated access to authentication endpoints while securing all others.
+     * Permits unauthenticated access to authentication endpoints and system error routes.
      *
      * @param http the HttpSecurity object to configure
      * @return the configured SecurityFilterChain
@@ -60,6 +60,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
