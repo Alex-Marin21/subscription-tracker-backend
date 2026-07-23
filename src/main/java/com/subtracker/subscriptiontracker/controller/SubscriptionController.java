@@ -1,54 +1,75 @@
 package com.subtracker.subscriptiontracker.controller;
 
 import com.subtracker.subscriptiontracker.entity.Subscription;
-import com.subtracker.subscriptiontracker.service.SubscriptionService;
-import com.subtracker.subscriptiontracker.service.RenewalAlertService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.subtracker.subscriptiontracker.entity.User;
+import com.subtracker.subscriptiontracker.repository.SubscriptionRepository;
+import com.subtracker.subscriptiontracker.repository.UserRepository;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * REST controller for managing subscriptions linked to the authenticated user.
+ */
 @RestController
 @RequestMapping("/api/subscriptions")
-@CrossOrigin(origins = "*")
 public class SubscriptionController {
 
-    @Autowired
-    private SubscriptionService subscriptionService;
+    private final SubscriptionRepository subscriptionRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private RenewalAlertService renewalAlertService;
-
-    @GetMapping
-    public List<Subscription> getAllSubscriptions() {
-        return subscriptionService.getAllSubscriptions();
+    public SubscriptionController(SubscriptionRepository subscriptionRepository, UserRepository userRepository) {
+        this.subscriptionRepository = subscriptionRepository;
+        this.userRepository = userRepository;
     }
 
-    @GetMapping("/{id}")
-    public Subscription getSubscriptionById(@PathVariable Long id) {
-        return subscriptionService.getSubscriptionById(id)
-                .orElseThrow(() -> new RuntimeException("Subscription not found with id " + id));
+    private User getAuthenticatedUser(Authentication authentication) {
+        String email = authentication.getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    @GetMapping
+    public List<Subscription> getAllSubscriptions(Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+        return subscriptionRepository.findByUserId(user.getId());
     }
 
     @PostMapping
-    public Subscription createSubscription(@RequestBody Subscription subscription) {
-        return subscriptionService.createSubscription(subscription);
+    public Subscription createSubscription(@RequestBody Subscription subscription, Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+        subscription.setUser(user);
+        return subscriptionRepository.save(subscription);
     }
 
     @PutMapping("/{id}")
-    public Subscription updateSubscription(@PathVariable Long id, @RequestBody Subscription subscription) {
-        return subscriptionService.updateSubscription(id, subscription);
+    public ResponseEntity<Subscription> updateSubscription(@PathVariable Long id, @RequestBody Subscription updatedSub, Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+        return subscriptionRepository.findById(id)
+                .filter(sub -> sub.getUser().getId().equals(user.getId()))
+                .map(sub -> {
+                    sub.setName(updatedSub.getName());
+                    sub.setPrice(updatedSub.getPrice());
+                    sub.setCurrency(updatedSub.getCurrency());
+                    sub.setBillingCycle(updatedSub.getBillingCycle());
+                    sub.setNextRenewalDate(updatedSub.getNextRenewalDate());
+                    sub.setCategory(updatedSub.getCategory());
+                    return ResponseEntity.ok(subscriptionRepository.save(sub));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
-    public void deleteSubscription(@PathVariable Long id) {
-        subscriptionService.deleteSubscription(id);
-    }
-
-    // Endpoint de test manual — declanșează verificarea de alerte imediat
-    @PostMapping("/test-alerts")
-    public String triggerAlerts() {
-        renewalAlertService.triggerManualCheck();
-        return "Alert check triggered. Check your email if any subscription renews in 1 or 3 days.";
+    public ResponseEntity<Void> deleteSubscription(@PathVariable Long id, Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+        return subscriptionRepository.findById(id)
+                .filter(sub -> sub.getUser().getId().equals(user.getId()))
+                .map(sub -> {
+                    subscriptionRepository.delete(sub);
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }
