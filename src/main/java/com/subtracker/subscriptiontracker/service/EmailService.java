@@ -4,8 +4,11 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Service responsible for dispatching email notifications, including renewals and authentication codes.
+ * Service responsible for dispatching email notifications asynchronously.
+ * Prevents SMTP connection timeouts from blocking database transactions or HTTP responses.
  */
 @Service
 public class EmailService {
@@ -22,7 +25,7 @@ public class EmailService {
     }
 
     /**
-     * Sends an email alert notifying the user of an upcoming subscription renewal.
+     * Asynchronously sends an email alert notifying the user of an upcoming subscription renewal.
      *
      * @param toEmail          the recipient email address
      * @param subscriptionName the name of the renewing service
@@ -31,26 +34,44 @@ public class EmailService {
      * @param currency         the currency code
      */
     public void sendRenewalAlert(String toEmail, String subscriptionName, String renewalDate, Double price, String currency) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(toEmail);
-        message.setSubject("Upcoming Renewal: " + subscriptionName);
-        message.setText("Hello,\n\nYour subscription for " + subscriptionName + " (" + price + " " + currency + ") will renew on " + renewalDate + ".\n\nPlease ensure you have sufficient funds available.\n\nSubTrack Team");
+        CompletableFuture.runAsync(() -> {
+            try {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setTo(toEmail);
+                message.setSubject("Upcoming Renewal: " + subscriptionName);
+                message.setText("Hello,\n\nYour subscription for " + subscriptionName + " (" + price + " " + currency + ") will renew on " + renewalDate + ".\n\nPlease ensure you have sufficient funds available.\n\nSubTrack Team");
 
-        mailSender.send(message);
+                mailSender.send(message);
+            } catch (Exception e) {
+                System.err.println("Could not send renewal email to " + toEmail + ". Error: " + e.getMessage());
+            }
+        });
     }
 
     /**
-     * Sends a One-Time Password (OTP) code for account verification or password reset.
+     * Asynchronously sends a One-Time Password (OTP) code for account verification.
+     * Logs the OTP to the console immediately for development and debugging purposes.
      *
      * @param toEmail the recipient email address
      * @param otpCode the generated 6-digit OTP code
      */
     public void sendOtpEmail(String toEmail, String otpCode) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(toEmail);
-        message.setSubject("Your SubTrack Verification Code");
-        message.setText("Hello,\n\nYour verification code is: " + otpCode + "\n\nThis code will expire in 15 minutes. Please do not share it with anyone.\n\nSubTrack Team");
+        // Output the OTP to the Render console immediately
+        System.out.println("\n=================================================");
+        System.out.println("🚀 OTP CODE FOR " + toEmail + " IS: [" + otpCode + "]");
+        System.out.println("=================================================\n");
 
-        mailSender.send(message);
+        CompletableFuture.runAsync(() -> {
+            try {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setTo(toEmail);
+                message.setSubject("Your SubTrack Verification Code");
+                message.setText("Hello,\n\nYour verification code is: " + otpCode + "\n\nThis code will expire in 15 minutes. Please do not share it with anyone.\n\nSubTrack Team");
+
+                mailSender.send(message);
+            } catch (Exception e) {
+                System.err.println("⚠️ SMTP Blocked: Could not send email to " + toEmail + ". Error details: " + e.getMessage());
+            }
+        });
     }
 }
