@@ -18,9 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 
-/**
- * Controller handling user registration, OTP verification, login, and password reset.
- */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -69,10 +66,12 @@ public class AuthController {
         }
 
         User user = new User(request.getEmail(), passwordEncoder.encode(request.getPassword()));
-        // If it's your specific email, make it admin automatically
-        if (request.getEmail().equals("alextest123@gmail.com")) { // Poti inlocui cu mail-ul tau real
+        
+        // IMPORTANT: Înlocuiește cu adresa ta reală dacă dorești să fii admin automat.
+        if (request.getEmail().equals("alextest123@gmail.com")) { 
             user.setRole(com.subtracker.subscriptiontracker.entity.Role.ADMIN);
         }
+        
         userRepository.save(user);
 
         String code = generateOtp();
@@ -110,7 +109,7 @@ public class AuthController {
         otpCodeRepository.delete(otpOpt.get());
 
         String token = jwtUtil.generateToken(user.getEmail());
-        return ResponseEntity.ok(new AuthResponse(token, user.getEmail()));
+        return ResponseEntity.ok(new AuthResponse(token, user.getEmail(), user.getRole().name()));
     }
 
     @PostMapping("/login")
@@ -125,7 +124,7 @@ public class AuthController {
         }
 
         String token = jwtUtil.generateToken(userOpt.get().getEmail());
-        return ResponseEntity.ok(new AuthResponse(token, userOpt.get().getEmail()));
+        return ResponseEntity.ok(new AuthResponse(token, userOpt.get().getEmail(), userOpt.get().getRole().name()));
     }
 
     @PostMapping("/forgot-password")
@@ -143,7 +142,6 @@ public class AuthController {
             otpCodeRepository.save(otpCode);
             emailService.sendOtpEmail(user.getEmail(), code);
         }
-        // Return same message even if not found for security (prevent email enumeration)
         return ResponseEntity.ok(Map.of("message", "If an account with this email exists, a reset code has been sent."));
     }
 
