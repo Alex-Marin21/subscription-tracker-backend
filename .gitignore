@@ -1,0 +1,4 @@
+target/
+.mvn/
+*.class
+src/main/resources/application.properties
